@@ -1,0 +1,6 @@
+project: savantenvs/fmt
+target: one-arg-fuzzer
+cmds:
+  - cmd: /mayhem/one-arg-fuzzer
+    libfuzzer: true
+    timeout: 5

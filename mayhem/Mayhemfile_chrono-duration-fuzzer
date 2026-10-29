@@ -1,0 +1,6 @@
+project: savantenvs/fmt
+target: chrono-duration-fuzzer
+cmds:
+  - cmd: /mayhem/chrono-duration-fuzzer
+    libfuzzer: true
+    timeout: 5

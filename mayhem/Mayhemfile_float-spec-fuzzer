@@ -1,0 +1,9 @@
+project: savantenvs/fmt
+target: float-spec-fuzzer
+testsuite:
+  - https://$MAYHEM_DOMAIN/$MAYHEM_PROJECT/$MAYHEM_TARGET/testsuite.tar
+  - file://mayhem/float-spec-fuzzer/testsuite
+cmds:
+  - cmd: /mayhem/float-spec-fuzzer
+    libfuzzer: true
+    timeout: 5
