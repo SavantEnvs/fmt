@@ -1,0 +1,9 @@
+project: savantenvs/fmt
+target: chrono-isoweek-fuzzer-mined-1266c2b
+testsuite:
+  - https://$MAYHEM_DOMAIN/$MAYHEM_PROJECT/$MAYHEM_TARGET/testsuite.tar
+  - file://mayhem/chrono-isoweek-fuzzer-mined-1266c2b/testsuite
+cmds:
+  - cmd: /mayhem/chrono-isoweek-fuzzer
+    libfuzzer: true
+    timeout: 5
