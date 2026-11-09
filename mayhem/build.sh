@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+# Builds the sanitized chrono-isoweek libFuzzer harness (+ run-once standalone reproducer) and fmt's own gtest suite.
+set -euo pipefail
+
+[ -n "${SOURCE_DATE_EPOCH:-}" ] || unset SOURCE_DATE_EPOCH
+
+: "${SANITIZER_FLAGS=-fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer}"
+: "${DEBUG_FLAGS:=-g -gdwarf-3}"
+: "${CC:=clang}" ; : "${CXX:=clang++}" ; : "${LIB_FUZZING_ENGINE:=-fsanitize=fuzzer}"
+: "${MAYHEM_JOBS:=$(nproc)}"
+: "${COVERAGE_FLAGS=}"
+export SANITIZER_FLAGS DEBUG_FLAGS CC CXX LIB_FUZZING_ENGINE MAYHEM_JOBS COVERAGE_FLAGS
+
+cd "$SRC"
+
+FUZZ_DEFS="-DFUZZING_BUILD_MODE_UNSAFE_FOR_PRODUCTION="
+
+# 1) fmt itself, sanitized with DWARF-3 and SanCov (fuzzer-no-link) so src/format.cc is covered. build/ is gitignored upstream.
+cmake -S . -B build/fuzz -G "Unix Makefiles" \
+  -DCMAKE_BUILD_TYPE=None -DFMT_DOC=OFF -DFMT_TEST=OFF -DFMT_FUZZ=OFF \
+  -DCMAKE_CXX_STANDARD=17 -DBUILD_SHARED_LIBS=OFF \
+  -DCMAKE_C_COMPILER="$CC" -DCMAKE_CXX_COMPILER="$CXX" \
+  -DCMAKE_CXX_FLAGS="$SANITIZER_FLAGS $DEBUG_FLAGS -O1 -fsanitize=fuzzer-no-link $FUZZ_DEFS"
+cmake --build build/fuzz -j"$MAYHEM_JOBS"
+
+# 2) harnesses: libFuzzer binary + standalone reproducer (driver compiled as C to keep C linkage).
+$CC $SANITIZER_FLAGS $DEBUG_FLAGS -c "$STANDALONE_FUZZ_MAIN" -o build/standalone_main.o
+$CXX $SANITIZER_FLAGS $DEBUG_FLAGS -c mayhem/lsan_off.cc -o build/lsan_off.o
+$CXX $SANITIZER_FLAGS $DEBUG_FLAGS -O1 -std=c++17 $FUZZ_DEFS -Iinclude -Itest/fuzzing \
+  $LIB_FUZZING_ENGINE mayhem/chrono-isoweek.cc build/lsan_off.o build/fuzz/libfmt.a -o /mayhem/chrono-isoweek-fuzzer
+$CXX $SANITIZER_FLAGS $DEBUG_FLAGS -O1 -std=c++17 $FUZZ_DEFS -Iinclude -Itest/fuzzing \
+  mayhem/chrono-isoweek.cc build/standalone_main.o build/lsan_off.o build/fuzz/libfmt.a -o /mayhem/chrono-isoweek-fuzzer-standalone
+
+# 3) fmt's gtest suite with NORMAL flags (no sanitizers); test.sh only runs it.
+cmake -S . -B build/tests -G "Unix Makefiles" \
+  -DCMAKE_BUILD_TYPE=Release -DFMT_DOC=OFF -DFMT_TEST=ON -DFMT_FUZZ=OFF -DFMT_WERROR=OFF \
+  -DCMAKE_C_COMPILER="$CC" -DCMAKE_CXX_COMPILER="$CXX" \
+  -DCMAKE_CXX_FLAGS="$COVERAGE_FLAGS" -DCMAKE_EXE_LINKER_FLAGS="$COVERAGE_FLAGS"
+cmake --build build/tests -j"$MAYHEM_JOBS"
